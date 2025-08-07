@@ -7,18 +7,24 @@ import plotly.graph_objects as go
 from sklearn.linear_model import LinearRegression
 import os
 
+# --- Configuración de la página
+st.set_page_config(page_title="Tablero HTS_TST", layout="wide")
 
-st.set_page_config(page_title="Tablero HTS_TST ", layout="wide")
+# --- Estilos globales para títulos y espaciado móvil
 st.markdown("""
 <style>
 h1 {
     text-shadow: 2px 2px 4px rgba(0, 0.1, 0.2, 0.5);
+}
+section.main > div {
+    padding-bottom: 2rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("📋TABLERO HTS_TST FY25")
 
+# --- Función para cargar datos
 @st.cache_data
 def cargar_datos(file):
     df_tst = pd.read_excel(file, sheet_name="HTS_TST")
@@ -32,27 +38,18 @@ def cargar_datos(file):
     df_metas['sitio'] = df_metas['sitio'].astype(str).str.strip()
     return df_tst, df_metas
 
-# --- Cargar archivo pidiendo el archivo
-
-#uploaded_file = st.sidebar.file_uploader("📂 Cargar archivo Excel", type=["xlsx"])
-#if not uploaded_file:
-#    st.warning("Por favor, carga el archivo Excel con las hojas HTS_TST y METAS_SITIOS.")
-#    st.stop()
-
-#df_tst, df_metas = cargar_datos(uploaded_file)
-
-#Carga de el archivo desde la carpeta raís
-archivo_nombre="Prueba Tablero Python.xlsx"
-archivo_path=os.path.join(os.path.dirname(__file__), archivo_nombre)
+# --- Cargar archivo desde carpeta raíz
+archivo_nombre = "Prueba Tablero Python.xlsx"
+archivo_path = os.path.join(os.path.dirname(__file__), archivo_nombre)
 
 if not os.path.exists(archivo_path):
-    st.error(f"❌ No se se encontro el archivo '{archivo_nombre}' en la misma carpeta script. ")
+    st.error(f"❌ No se encontró el archivo '{archivo_nombre}' en la misma carpeta del script.")
     st.stop()
 
-df_tst, df_metas =cargar_datos(archivo_path)
-st.success(f"✅ Archivo cargado correctamente : {archivo_nombre}")
+df_tst, df_metas = cargar_datos(archivo_path)
+st.success(f"✅ Archivo cargado correctamente: {archivo_nombre}")
 
-# --- Filtros jerárquicos
+# --- Filtros
 paises = sorted(df_tst['país'].dropna().unique())
 pais_sel = st.sidebar.selectbox("🌍 País", ["Todos"] + paises)
 
@@ -93,37 +90,44 @@ df_resumen['% Alcance Meta'] = (
     (df_resumen['Positivos'] / df_resumen['hts_pos fy25']) * 100
 ).replace([float('inf'), -float('inf')], 0).fillna(0).round(1)
 
-# --- Tarjetas estilo Power BI con estilo
-st.subheader("📊 Resúmen de metas")
+# --- Tarjetas estilo responsivo
 total_pruebas = df_resumen['Total_Pruebas'].sum()
 total_positivos = df_resumen['Positivos'].sum()
 meta_total = df_resumen['hts_pos fy25'].sum()
 positividad = (total_positivos / total_pruebas * 100) if total_pruebas > 0 else 0
 alcance_meta = (total_positivos / meta_total * 100) if meta_total > 0 else 0
 
+st.subheader("📊 Resumen de Metas")
 st.markdown(f"""
 <style>
 .card-container {{
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-around;
     margin-bottom: 20px;
 }}
 .card {{
     background-color: #f0f2f6;
-    padding: 20px 25px;
+    padding: 15px 20px;
     border-radius: 12px;
     text-align: center;
-    width: 22%;
+    width: 45%;
+    margin: 10px;
     box-shadow: 0 2px 6px rgba(0,0,0.2,0.2);
+}}
+@media (max-width: 768px) {{
+    .card {{
+        width: 100%;
+    }}
 }}
 .card h2 {{
     margin: 0;
-    font-size: 30px;
+    font-size: 26px;
     color: #2c3e50;
 }}
 .card p {{
     margin: 5px 0 0;
-    font-size: 16px;
+    font-size: 14px;
     color: #7f8c8d;
 }}
 </style>
@@ -147,8 +151,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-
-# --- Mostrar tabla con formato condicional
+# --- Tabla resumen por unidad de salud
 st.subheader("📌 Resumen por unidad de salud")
 def formato_color(val):
     if isinstance(val, (int, float)):
@@ -174,9 +177,9 @@ styled_df = df_resumen.rename(columns={
 
 st.dataframe(styled_df, use_container_width=True)
 
-# === Gráficas mensuales
+# --- Gráficas y análisis mensual
 if 'fecha del diagnóstico' in df_filt.columns:
-    st.subheader("📆 Tendencias mensuales separadas")
+    st.subheader("📆 Tendencias mensuales")
 
     df_filt['fecha del diagnóstico'] = pd.to_datetime(df_filt['fecha del diagnóstico'], errors='coerce')
     df_filt['mes'] = df_filt['fecha del diagnóstico'].dt.to_period('M').astype(str)
@@ -187,7 +190,7 @@ if 'fecha del diagnóstico' in df_filt.columns:
         Total_Positivos=('resultado de la prueba de vih', lambda x: (x == 'POSITIVO').sum())
     ).reset_index().sort_values('mes_dt')
 
-    # --- Gráfica mensual de pruebas con línea de tendencia
+    # --- Pruebas por mes
     fig_pruebas = px.line(df_linea, x='mes_dt', y='Total_Pruebas',
         title="📈 Total de Pruebas por Mes", markers=True, text='Total_Pruebas')
     fig_pruebas.update_traces(textposition="top center")
@@ -199,7 +202,7 @@ if 'fecha del diagnóstico' in df_filt.columns:
     fig_pruebas.update_layout(xaxis_title="Mes", yaxis_title="Total de pruebas", template="plotly_white")
     st.plotly_chart(fig_pruebas, use_container_width=True)
 
-    # --- Gráfica mensual de positivos con línea de tendencia
+    # --- Positivos por mes
     fig_positivos = px.line(df_linea, x='mes_dt', y='Total_Positivos',
         title="📈 Total de Positivos por Mes", markers=True, text='Total_Positivos')
     fig_positivos.update_traces(textposition="top center")
@@ -211,7 +214,7 @@ if 'fecha del diagnóstico' in df_filt.columns:
     fig_positivos.update_layout(xaxis_title="Mes", yaxis_title="Total positivos", template="plotly_white")
     st.plotly_chart(fig_positivos, use_container_width=True)
 
-    # === Proyección acumulada a septiembre
+    # --- Proyección acumulada a septiembre
     st.subheader("📈 Proyección acumulada de positivos hasta septiembre")
     df_acum = df_linea[['mes_dt', 'Total_Positivos']].copy()
     df_acum['Acumulado'] = df_acum['Total_Positivos'].cumsum()
@@ -234,7 +237,7 @@ if 'fecha del diagnóstico' in df_filt.columns:
     df_final = pd.concat([df_real, df_proj], ignore_index=True)
 
     fig_acum = px.line(df_final, x='mes_dt', y='Acumulado', color='Tipo',
-        title="📈 Positivos Acumulados por Mes con Proyección", markers=True, text='Acumulado')
+        title="📈 Positivos Acumulados con Proyección", markers=True, text='Acumulado')
     fig_acum.update_traces(textposition="top center")
     fig_acum.update_layout(xaxis_title="Mes", yaxis_title="Positivos acumulados", template="plotly_white", hovermode="x unified")
     fig_acum.add_trace(go.Scatter(
@@ -243,9 +246,9 @@ if 'fecha del diagnóstico' in df_filt.columns:
     ))
     st.plotly_chart(fig_acum, use_container_width=True)
 
-    # === %CD4 <200 entre positivos
+    # --- CD4<200
     if 'cd4 basal' in df_filt.columns:
-        st.subheader("📉 Porcentaje de CD4<200 entre positivos por mes")
+        st.subheader("📉 % de CD4<200 entre positivos por mes")
         df_cd4 = df_filt[df_filt['resultado de la prueba de vih'] == 'POSITIVO'].copy()
         df_cd4['cd4 basal'] = pd.to_numeric(df_cd4['cd4 basal'], errors='coerce')
         df_cd4['CD4<200'] = df_cd4['cd4 basal'] < 200
